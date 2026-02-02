@@ -1,18 +1,25 @@
 # ============================================================
 # TEMP FIX: Apple App Store Connect API rejects empty filters
 # Fixes: "A parameter has an invalid value - '' is not a valid filter"
+#
+# Strategy:
+#   Remove empty filter values before sending requests to Apple.
 # ============================================================
 
 if ENV["CI"] == "true"
-  require 'spaceship'
+  require "spaceship"
 
-  ::Spaceship::ConnectAPI::BundleId.singleton_class.class_eval do
-    unless method_defined?(:_all_without_platform_fix)
-      alias_method :_all_without_platform_fix, :all
+  ::Spaceship::ConnectAPI::APIClient.class_eval do
+    unless method_defined?(:_get_without_empty_filter_fix)
+      alias_method :_get_without_empty_filter_fix, :get
 
-      def all(**args)
-        args[:platform] = "IOS" if args[:platform].nil? || args[:platform].to_s.empty?
-        _all_without_platform_fix(**args)
+      def get(path, params = {})
+        if params.is_a?(Hash) && params[:filter].is_a?(Hash)
+          params[:filter].delete_if { |_k, v| v.nil? || v.to_s.strip.empty? }
+          params.delete(:filter) if params[:filter].empty?
+        end
+
+        _get_without_empty_filter_fix(path, params)
       end
     end
   end
