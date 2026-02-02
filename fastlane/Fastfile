@@ -1,3 +1,26 @@
+# ============================================================
+# TEMP FIX: Apple App Store Connect API rejects empty filters
+# Fixes: "A parameter has an invalid value - '' is not a valid filter"
+#
+# Can be safely removed once fastlane / Apple API is fixed.
+# ============================================================
+
+module Spaceship
+  module ConnectAPI
+    class BundleId
+      class << self
+        alias_method :_all_without_platform_fix, :all
+
+        def all(**args)
+          # Apple API no longer accepts empty platform filters
+          args[:platform] = "IOS" if args[:platform].nil? || args[:platform].to_s.empty?
+          _all_without_platform_fix(**args)
+        end
+      end
+    end
+  end
+end
+
 # Fastfile for Flutter iOS CI/CD
 
 org, repo = (ENV["GITHUB_REPOSITORY"]||"").split("/")
