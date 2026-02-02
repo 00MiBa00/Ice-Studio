@@ -22,7 +22,10 @@ class SessionService extends ChangeNotifier {
       _sessions = decoded
           .map((json) => SessionModel.fromJson(json as Map<String, dynamic>))
           .toList();
+      print('📊 Loaded ${_sessions.length} sessions from storage');
       notifyListeners();
+    } else {
+      print('📊 No sessions found in storage');
     }
   }
 
@@ -30,6 +33,7 @@ class SessionService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(_sessions.map((s) => s.toJson()).toList());
     await prefs.setString(_sessionsKey, encoded);
+    print('💾 Saved ${_sessions.length} sessions to storage');
   }
 
   void startSession(ModeType mode) {
@@ -42,6 +46,8 @@ class SessionService extends ChangeNotifier {
 
     final duration = DateTime.now().difference(_currentSessionStart!);
     
+    print('⏱️ Session ended: ${_currentMode?.toString()} - ${duration.inSeconds}s');
+    
     // Only save sessions longer than minimum duration
     if (duration.inSeconds >= _minimumSessionSeconds) {
       final session = SessionModel(
@@ -53,10 +59,51 @@ class SessionService extends ChangeNotifier {
       _sessions.add(session);
       await _saveSessions();
       notifyListeners();
+      print('✅ Session saved successfully');
+    } else {
+      print('❌ Session too short (${duration.inSeconds}s < $_minimumSessionSeconds s)');
     }
 
     _currentSessionStart = null;
     _currentMode = null;
+  }
+
+  Future<void> addTestSessions() async {
+    final now = DateTime.now();
+    
+    // Add test sessions for today
+    _sessions.addAll([
+      SessionModel(
+        mode: ModeType.antiStress,
+        duration: const Duration(minutes: 5),
+        timestamp: now.subtract(const Duration(hours: 2)),
+      ),
+      SessionModel(
+        mode: ModeType.focusBounce,
+        duration: const Duration(minutes: 10),
+        timestamp: now.subtract(const Duration(hours: 1)),
+      ),
+      SessionModel(
+        mode: ModeType.zenSand,
+        duration: const Duration(minutes: 8),
+        timestamp: now.subtract(const Duration(minutes: 30)),
+      ),
+    ]);
+    
+    // Add sessions for past days (for streak)
+    for (int i = 1; i < 5; i++) {
+      _sessions.add(
+        SessionModel(
+          mode: ModeType.antiStress,
+          duration: const Duration(minutes: 15),
+          timestamp: now.subtract(Duration(days: i)),
+        ),
+      );
+    }
+    
+    await _saveSessions();
+    notifyListeners();
+    print('🧪 Added ${_sessions.length} test sessions');
   }
 
   Future<void> resetSessions() async {

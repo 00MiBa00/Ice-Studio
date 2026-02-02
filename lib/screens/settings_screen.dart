@@ -116,41 +116,105 @@ class SettingsScreen extends StatelessWidget {
                     color: AppColors.surfaceDark,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.all(16),
-                    onPressed: () => _showResetConfirmation(context),
-                    child: const Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Reset Statistics',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: CupertinoColors.destructiveRed,
-                                ),
+                  child: Column(
+                    children: [
+                      CupertinoButton(
+                        padding: const EdgeInsets.all(16),
+                        onPressed: () async {
+                          final sessionService = Provider.of<SessionService>(context, listen: false);
+                          await sessionService.addTestSessions();
+                          if (context.mounted) {
+                            final soundService = Provider.of<SoundService>(context, listen: false);
+                            soundService.playMediumHaptic();
+                            showCupertinoDialog(
+                              context: context,
+                              builder: (context) => CupertinoAlertDialog(
+                                title: const Text('Test Data Added'),
+                                content: const Text('Test sessions have been added to statistics.'),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Delete all session data',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: CupertinoColors.systemGrey,
-                                ),
+                            );
+                          }
+                        },
+                        child: const Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Add Test Data',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.primaryBlue,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Add sample sessions for testing',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: CupertinoColors.systemGrey,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            Icon(
+                              CupertinoIcons.lab_flask,
+                              color: AppColors.primaryBlue,
+                              size: 20,
+                            ),
+                          ],
                         ),
-                        Icon(
-                          CupertinoIcons.trash,
-                          color: CupertinoColors.destructiveRed,
-                          size: 20,
+                      ),
+                      Container(
+                        height: 1,
+                        color: AppColors.surfaceLight,
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.all(16),
+                        onPressed: () => _showResetConfirmation(context),
+                        child: const Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Reset Statistics',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: CupertinoColors.destructiveRed,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Delete all session data',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: CupertinoColors.systemGrey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.trash,
+                              color: CupertinoColors.destructiveRed,
+                              size: 20,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 48),
