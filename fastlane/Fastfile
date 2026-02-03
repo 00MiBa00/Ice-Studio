@@ -1,10 +1,13 @@
 # Fastfile for Flutter iOS CI/CD
 
-org, repo = (ENV["GITHUB_REPOSITORY"]||"").split("/")
-match_org, match_repo = (ENV["MATCH_REPOSITORY"]||"").split("/")
+org, repo = (ENV["GITHUB_REPOSITORY"] || "").split("/")
+match_org, match_repo = (ENV["MATCH_REPOSITORY"] || "").split("/")
 
 platform :ios do
-  
+
+  ############################################################
+  # One-time CI bootstrap (создаёт deploy key и match repo)
+  ############################################################
   lane :init_ci do
     github_action(
       api_token: ENV["GH_PAT"],
@@ -15,58 +18,70 @@ platform :ios do
       writable_deploy_key: true
     )
   end
-  
-  desc "Create certificates if repo is empty"
-lane :sync_certificates do
-  # ❗ ОСТАВЛЯЕМ — чтобы fastlane был авторизован
-  app_store_connect_api_key(
-    key_id: ENV["APPSTORE_KEY_ID"],
-    issuer_id: ENV["APPSTORE_ISSUER_ID"],
-    key_content: ENV["APPSTORE_P8"]
-  )
 
-  main_app_bundle_id = ENV["IOS_BUNDLE_ID"]
-  extension_bundle_id = "#{main_app_bundle_id}.notifications"
-
-  match(
-    type: "appstore",
-    storage_mode: "git",
-    git_url: "git@github.com:#{match_org}/#{match_repo}.git",
-    app_identifier: [main_app_bundle_id, extension_bundle_id],
-    readonly: false
-    # 🚫 НЕТ api_key:
-  )
-end
-
-desc "Sync codesigning certificates for Build"
-  lane :sync_certificates_for_build do
-    api_key = app_store_connect_api_key(
+  ############################################################
+  # BOOTSTRAP: создаёт сертификаты, если match-repo пустой
+  # ❗ БЕЗ api_key (обход Apple bug)
+  ############################################################
+  desc "Create certificates if match repo is empty"
+  lane :sync_certificates do
+    # Авторизация fastlane (НЕ передаём api_key в match)
+    app_store_connect_api_key(
       key_id: ENV["APPSTORE_KEY_ID"],
       issuer_id: ENV["APPSTORE_ISSUER_ID"],
-      key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      key_content: ENV["APPSTORE_P8"]
     )
 
     main_app_bundle_id = ENV["IOS_BUNDLE_ID"]
-    extension_bundle_id = "#{ENV["IOS_BUNDLE_ID"]}.notifications"
+    extension_bundle_id = "#{main_app_bundle_id}.notifications"
 
     match(
       type: "appstore",
       storage_mode: "git",
       git_url: "git@github.com:#{match_org}/#{match_repo}.git",
       app_identifier: [main_app_bundle_id, extension_bundle_id],
-      readonly: false,
+      readonly: false
+    )
+  end
+
+  ############################################################
+  # CI / BUILD: только установка сертификатов (readonly)
+  ############################################################
+  desc "Sync certificates for CI build (readonly)"
+  lane :sync_certificates_for_build do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APPSTORE_KEY_ID"],
+      issuer_id: ENV["APPSTORE_ISSUER_ID"],
+      key_content: ENV["APPSTORE_P8"]
+    )
+
+    main_app_bundle_id = ENV["IOS_BUNDLE_ID"]
+    extension_bundle_id = "#{main_app_bundle_id}.notifications"
+
+    match(
+      type: "appstore",
+      storage_mode: "git",
+      git_url: "git@github.com:#{match_org}/#{match_repo}.git",
+      app_identifier: [main_app_bundle_id, extension_bundle_id],
+      readonly: true,
+      skip_certificate_matching: true,
       api_key: api_key
     )
   end
 
+  ############################################################
+  # Build + TestFlight
+  ############################################################
   desc "Build and upload to TestFlight"
   lane :beta do
     setup_ci
-    
-    # Sync certificates
-    sync_certificates
-    
-    # Configure manual code signing for Xcode project
+
+    # ❗ В CI всегда используем readonly-lane
+    sync_certificates_for_build
+
+    ##########################################################
+    # Manual code signing
+    ##########################################################
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "ios/Runner.xcodeproj",
@@ -75,8 +90,7 @@ desc "Sync codesigning certificates for Build"
       profile_name: ENV["sigh_#{ENV['IOS_BUNDLE_ID']}_appstore_profile-name"],
       code_sign_identity: "Apple Distribution"
     )
-    
-    # # Configure manual code signing for notification extension
+
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "ios/Runner.xcodeproj",
@@ -86,92 +100,73 @@ desc "Sync codesigning certificates for Build"
       profile_name: ENV["sigh_#{ENV['IOS_BUNDLE_ID']}.notifications_appstore_profile-name"],
       code_sign_identity: "Apple Distribution"
     )
-    
-    # Update ExportOptions.plist with Match provisioning profiles
+
+    ##########################################################
+    # ExportOptions.plist
+    ##########################################################
     export_options_path = File.expand_path("../ios/ExportOptions.plist", __dir__)
-    
-    # Get provisioning profile names from Match
-    main_profile = ENV["sigh_#{ENV['IOS_BUNDLE_ID']}_appstore_profile-name"]
-    # extension_profile = ENV["sigh_#{ENV['IOS_BUNDLE_ID']}.notifications_appstore_profile-name"]
-    
-    # Read, update and write ExportOptions.plist
-    require 'plist'
-    export_options = Plist.parse_xml(export_options_path)
+    require "plist"
 
-    # If the ExportOptions.plist is missing or couldn't be parsed, create a minimal
-    # export_options structure so we can populate teamID and provisioningProfiles.
-    if export_options.nil?
-      UI.message("ExportOptions.plist not found or invalid at #{export_options_path}. Creating a minimal ExportOptions structure.")
-      export_options = {
-        'method' => 'app-store',
-        'teamID' => ENV['APPLE_TEAM_ID'],
-        'provisioningProfiles' => {}
-      }
-    end
+    export_options = Plist.parse_xml(export_options_path) || {
+      "method" => "app-store",
+      "teamID" => ENV["APPLE_TEAM_ID"],
+      "provisioningProfiles" => {}
+    }
 
-    # Ensure teamID is set when available
-    export_options['teamID'] = ENV['APPLE_TEAM_ID'] if ENV['APPLE_TEAM_ID'] && !ENV['APPLE_TEAM_ID'].empty?
-
-    # Populate provisioningProfiles mapping
-    export_options['provisioningProfiles'] = {
-      ENV['IOS_BUNDLE_ID'] => main_profile
-      # "#{ENV['IOS_BUNDLE_ID']}.notifications" => extension_profile
+    export_options["teamID"] = ENV["APPLE_TEAM_ID"]
+    export_options["provisioningProfiles"] = {
+      ENV["IOS_BUNDLE_ID"] =>
+        ENV["sigh_#{ENV['IOS_BUNDLE_ID']}_appstore_profile-name"]
     }
 
     File.write(export_options_path, export_options.to_plist)
-    
-    # Determine a safe build number.
-    # Default behavior: use an epoch timestamp to guarantee uniqueness between uploads.
-    # If you *really* want to use the CI-provided BUILD_NUMBER (e.g. github.run_number),
-    # set ENV['FORCE_CI_BUILD_NUMBER']='true' in the workflow.
-    build_number_env = ENV['BUILD_NUMBER']
-    if ENV['FORCE_CI_BUILD_NUMBER'] == 'true' && build_number_env && build_number_env.to_i > 0
-      safe_build_number = build_number_env
-      UI.message("Using CI-provided BUILD_NUMBER: #{safe_build_number} (FORCE_CI_BUILD_NUMBER=true)")
-    else
-      safe_build_number = Time.now.to_i.to_s
-      if build_number_env && build_number_env.to_i > 0
-        UI.message("Ignoring CI BUILD_NUMBER=#{build_number_env} in favor of timestamp to avoid duplicate uploads. To force CI BUILD_NUMBER set FORCE_CI_BUILD_NUMBER=true")
-      end
-      UI.message("Using timestamp build number: #{safe_build_number}")
-    end
 
-    # Build Flutter IPA with the chosen build number
-    # Ensure iOS Info.plist CFBundleVersion is updated so App Store sees the new build number
-    begin
-      info_plist_path = File.expand_path("../ios/Runner/Info.plist", __dir__)
-      if File.exist?(info_plist_path)
-        UI.message("Updating #{info_plist_path} CFBundleVersion => #{safe_build_number}")
-        require 'plist'
-        info_plist = Plist.parse_xml(info_plist_path)
-        info_plist['CFBundleVersion'] = safe_build_number
-        File.write(info_plist_path, info_plist.to_plist)
+    ##########################################################
+    # Safe build number
+    ##########################################################
+    safe_build_number =
+      if ENV["FORCE_CI_BUILD_NUMBER"] == "true" &&
+         ENV["BUILD_NUMBER"].to_i > 0
+        ENV["BUILD_NUMBER"]
       else
-        UI.message("Warning: Info.plist not found at #{info_plist_path}, skipping CFBundleVersion update")
+        Time.now.to_i.to_s
       end
-    rescue => ex
-      UI.message("Failed to update Info.plist: #{ex.message}")
+
+    ##########################################################
+    # Update Info.plist
+    ##########################################################
+    info_plist_path = File.expand_path("../ios/Runner/Info.plist", __dir__)
+    if File.exist?(info_plist_path)
+      plist = Plist.parse_xml(info_plist_path)
+      plist["CFBundleVersion"] = safe_build_number
+      File.write(info_plist_path, plist.to_plist)
     end
 
-  sh("flutter build ipa --release --export-options-plist=#{export_options_path} --build-number=#{safe_build_number} --no-tree-shake-icons")
-    
-    # Find the built IPA file with absolute path
-    ipa_path = Dir.glob(File.expand_path("../build/ios/ipa/*.ipa", __dir__)).first
-    UI.user_error!("No IPA file found at build/ios/ipa/") unless ipa_path
-    
-    # API Key for TestFlight upload
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APPSTORE_KEY_ID"],
-      issuer_id: ENV["APPSTORE_ISSUER_ID"],
-      key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    ##########################################################
+    # Build Flutter IPA
+    ##########################################################
+    sh(
+      "flutter build ipa --release " \
+      "--export-options-plist=#{export_options_path} " \
+      "--build-number=#{safe_build_number} " \
+      "--no-tree-shake-icons"
     )
-    
+
+    ipa_path =
+      Dir.glob(File.expand_path("../build/ios/ipa/*.ipa", __dir__)).first
+    UI.user_error!("IPA not found") unless ipa_path
+
+    ##########################################################
     # Upload to TestFlight
+    ##########################################################
     upload_to_testflight(
-      skip_waiting_for_build_processing: true,
       ipa: ipa_path,
-      api_key: api_key
+      skip_waiting_for_build_processing: true,
+      api_key: app_store_connect_api_key(
+        key_id: ENV["APPSTORE_KEY_ID"],
+        issuer_id: ENV["APPSTORE_ISSUER_ID"],
+        key_content: ENV["APPSTORE_P8"]
+      )
     )
   end
-
 end
