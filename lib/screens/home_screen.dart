@@ -91,6 +91,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildFeatureRow(IconData icon, String title, String description, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: CupertinoColors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: CupertinoColors.white.withOpacity(0.6),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
@@ -254,28 +294,74 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Icon(
+                        CupertinoIcons.sparkles,
+                        size: 48,
+                        color: AppColors.antiStress,
+                      ),
+                      const SizedBox(height: 20),
                       const Text(
-                        'Choose a mode to relax',
+                        'Welcome to Ice Studio',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
                           color: CupertinoColors.white,
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Your personal space for relaxation and focus',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: CupertinoColors.white.withOpacity(0.7),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      _buildFeatureRow(
+                        CupertinoIcons.circle_fill,
+                        'Anti-Stress',
+                        'Squeeze the ball to release tension',
+                        AppColors.antiStress,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFeatureRow(
+                        CupertinoIcons.sportscourt_fill,
+                        'Focus Bounce',
+                        'Follow the ball to improve concentration',
+                        AppColors.focusBounce,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFeatureRow(
+                        CupertinoIcons.paintbrush_fill,
+                        'Zen Sand',
+                        'Draw patterns for meditation',
+                        AppColors.zenSand,
                       ),
                       const SizedBox(height: 32),
                       CupertinoButton(
                         color: AppColors.antiStress,
+                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                        borderRadius: BorderRadius.circular(12),
                         onPressed: _startAntiStress,
-                        child: const Text('Start Anti-Stress'),
+                        child: const Text(
+                          'Try Anti-Stress Mode',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       CupertinoButton(
                         onPressed: _skipFirstLaunch,
                         child: Text(
-                          'Skip',
+                          'Explore on My Own',
                           style: TextStyle(
-                            color: CupertinoColors.white.withOpacity(0.6),
+                            fontSize: 15,
+                            color: CupertinoColors.white.withOpacity(0.5),
                           ),
                         ),
                       ),
