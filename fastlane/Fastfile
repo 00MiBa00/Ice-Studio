@@ -16,26 +16,27 @@ platform :ios do
     )
   end
   
-  desc "Sync codesigning certificates"
-  lane :sync_certificates do
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APPSTORE_KEY_ID"],
-      issuer_id: ENV["APPSTORE_ISSUER_ID"],
-      key_content: ENV['APPSTORE_P8']
+  desc "Create certificates if repo is empty"
+lane :sync_certificates do
+  # ❗ ОСТАВЛЯЕМ — чтобы fastlane был авторизован
+  app_store_connect_api_key(
+    key_id: ENV["APPSTORE_KEY_ID"],
+    issuer_id: ENV["APPSTORE_ISSUER_ID"],
+    key_content: ENV["APPSTORE_P8"]
+  )
 
-    )
+  main_app_bundle_id = ENV["IOS_BUNDLE_ID"]
+  extension_bundle_id = "#{main_app_bundle_id}.notifications"
 
-    main_app_bundle_id = ENV["IOS_BUNDLE_ID"]
-    extension_bundle_id = "#{ENV["IOS_BUNDLE_ID"]}.notifications"
-
-    match(
-      type: "appstore",
-      storage_mode: "git",
-      git_url: "git@github.com:#{match_org}/#{match_repo}.git",
-      app_identifier: [main_app_bundle_id, extension_bundle_id],
-      api_key: api_key
-    )
-  end
+  match(
+    type: "appstore",
+    storage_mode: "git",
+    git_url: "git@github.com:#{match_org}/#{match_repo}.git",
+    app_identifier: [main_app_bundle_id, extension_bundle_id],
+    readonly: false
+    # 🚫 НЕТ api_key:
+  )
+end
 
 desc "Sync codesigning certificates for Build"
   lane :sync_certificates_for_build do
