@@ -24,6 +24,17 @@ jobs:
           ruby-version: 3.2
           bundler-cache: true
 
+      - name: Debug env
+        env:
+          IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+          MATCH_REPOSITORY: ${{ secrets.MATCH_REPOSITORY }}
+          GITHUB_REPOSITORY: ${{ env.GITHUB_REPOSITORY }}
+        run: |
+          echo "IOS_BUNDLE_ID='${IOS_BUNDLE_ID}'"
+          echo "MATCH_REPOSITORY='${MATCH_REPOSITORY}'"
+          echo "GITHUB_REPOSITORY='${GITHUB_REPOSITORY}'"
+
+
       ###########
       #  Build  #
       ###########
