@@ -1,3 +1,6 @@
+name: ice_studio
+description: Flutter application
+
 version: 1.0.0+1 # Версия приложения + номер сборки
 
 environment:
