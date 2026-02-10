@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
 import '../theme/colors.dart';
 import '../services/first_launch_service.dart';
-import '../services/sound_service.dart';
 import '../widgets/mode_button.dart';
 import '../widgets/subtle_hint.dart';
 import 'anti_stress_screen.dart';
