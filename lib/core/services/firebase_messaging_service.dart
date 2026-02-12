@@ -19,8 +19,9 @@ class FirebaseMessagingService {
   LocalNotificationsService? _localNotificationsService;
 
   /// Initialize Firebase Messaging and sets up all message listeners
-  Future<String> init(
-      {required LocalNotificationsService localNotificationsService}) async {
+  Future<String> init({
+    required LocalNotificationsService localNotificationsService,
+  }) async {
     // Init local notifications service
     _localNotificationsService = localNotificationsService;
 
@@ -95,8 +96,11 @@ class FirebaseMessagingService {
     final notificationData = message.notification;
     if (notificationData != null) {
       // Display a local notification using the service
-      _localNotificationsService?.showNotification(notificationData.title,
-          notificationData.body, message.data.toString());
+      _localNotificationsService?.showNotification(
+        notificationData.title,
+        notificationData.body,
+        message.data.toString(),
+      );
     }
   }
 
@@ -104,9 +108,12 @@ class FirebaseMessagingService {
   void _onMessageOpenedApp(RemoteMessage message) {
     if (kDebugMode) {
       print(
-          '2 Notification caused the app to open: ${message.data.toString()}');
+        '2 Notification caused the app to open: ${message.data.toString()}',
+      );
     }
-    SdkInitializer.pushURL = message.data.toString();
+    SdkInitializer.pushURL = message.data['url'];
+    EventBus.instance.fire(message.data['url']);
+    print('3 Notification caused the app to open: ${message.data.toString()}');
     // TODO: Add navigation or specific handling based on message data
   }
 
@@ -116,7 +123,8 @@ class FirebaseMessagingService {
 
     final firebaseMessagingService = FirebaseMessagingService.instance();
     var token = await firebaseMessagingService.init(
-        localNotificationsService: localNotificationsService);
+      localNotificationsService: localNotificationsService,
+    );
 
     return token;
   }

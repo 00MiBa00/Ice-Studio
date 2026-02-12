@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:appsflyer_sdk/appsflyer_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -113,7 +116,7 @@ class SdkInitializer {
   static void showApp(BuildContext context) {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const IceStudio()),
+      MaterialPageRoute(builder: (context) => const ClearApp()),
       (route) => false,
     );
   }
@@ -129,8 +132,9 @@ class SdkInitializer {
     );
   }
 
-  static const MethodChannel _channel =
-      MethodChannel('com.yourapp/native_methods');
+  static const MethodChannel _channel = MethodChannel(
+    'com.yourapp/native_methods',
+  );
 
   static Future<void> callSwiftMethod() async {
     try {
@@ -184,6 +188,9 @@ class SdkInitializer {
             _onMessageOpenedApp(initialMessage);
           }
           FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
+          FirebaseMessaging.onBackgroundMessage(
+            _firebaseMessagingBackgroundHandler,
+          );
           showWeb(context);
         }
       } else {
@@ -199,13 +206,21 @@ class SdkInitializer {
     //initAppsFlyer();
   }
 
+  static Future<void> _firebaseMessagingBackgroundHandler(
+    RemoteMessage message,
+  ) async {
+    print("push url" + message.data['url']);
+    SdkInitializer.pushURL = message.data['url'];
+  }
+
   static void _onMessageOpenedApp(RemoteMessage message) {
     if (kDebugMode) {
       print(
-          '1 Notification caused the app to open: ${message.data.toString()}');
+        '1 Notification caused the app to open: ${message.data.toString()}',
+      );
     }
     SdkInitializer.pushURL = message.data['url'];
-
+    EventBus.instance.fire(message.data['url']);
     // TODO: Add navigation or specific handling based on message data
   }
 
@@ -327,7 +342,8 @@ class SdkInitializer {
           _convrtsion.addAll(map);
           if (kDebugMode) {
             print(
-                'deep_link_value=$deep_link_value deep_link_sub1=$deep_link_sub1|');
+              'deep_link_value=$deep_link_value deep_link_sub1=$deep_link_sub1|',
+            );
           }
           break;
         case Status.NOT_FOUND:
@@ -402,7 +418,8 @@ class SdkInitializer {
 
               if (kDebugMode) {
                 print(
-                    '|${entry.key} - ${entry.value} |${_convrtsion[entry.key]}');
+                  '|${entry.key} - ${entry.value} |${_convrtsion[entry.key]}',
+                );
               }
             }
           }
@@ -410,14 +427,16 @@ class SdkInitializer {
           // _convrtsion.addAll(conversionMap);
           // _convrtsion
           //     .addEntries(conversionMap as Iterable<MapEntry<String, dynamic>>);
-          _convrtsion.addEntries([MapEntry("af_id", value)]);
+          if (_convrtsion != null) {
+            _convrtsion.addEntries([MapEntry("af_id", value)]);
 
-          setValue('conversionData', _convrtsion);
-          var url = await makeConversion(_convrtsion);
-          if (kDebugMode) {
-            print("url -" + url);
+            setValue('conversionData', _convrtsion);
+            var url = await makeConversion(_convrtsion);
+            if (kDebugMode) {
+              print("url -" + url);
+            }
+            onEndRequest(url);
           }
-          onEndRequest(url);
         });
 
         // if (res is Map<dynamic, dynamic>) {
@@ -508,35 +527,51 @@ class SdkInitializer {
 
   static bool isIOSSimulator() {
     return false;
+    if (!Platform.isIOS) return false;
+
+    // Проверяем переменные окружения симулятора
+    return Platform.environment.containsKey('SIMULATOR_DEVICE_NAME') ||
+        Platform.environment.containsKey('SIMULATOR_HOST_HOME') ||
+        Platform.environment.containsKey('SIMULATOR_UDID');
   }
 
   static Future<void> pushRequest(BuildContext context) async {
     await Firebase.initializeApp();
 
     var token = await FirebaseMessagingService.InitPushAndGetToken();
+    if (token == null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const WebViewScreen()),
+        (route) => false,
+      );
+      return;
+    }
 
     PushRequestControl.acceptPushRequest(pushRequestData!);
 
     setValue("pushRequestData", pushRequestData?.toJson());
-    _convrtsion = SdkInitializer.getValue('conversionData') as Map<String, dynamic>;
-    if (kDebugMode) {
-      print("makeConversion 2");
+    _convrtsion = SdkInitializer.getValue('conversionData');
+    if (_convrtsion is Map<String, dynamic>) {
+      if (kDebugMode) {
+        print("makeConversion 2");
+      }
+      var url = await SdkInitializer.secondMakeConversion(
+        _convrtsion,
+        apnsToken: token,
+        isLoad: false,
+      );
+      setValue(url, "receivedUrl");
+      if (kDebugMode) {
+        print("pushRequest ");
+      }
+      _runtimeStorage['receivedUrl'] = url;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const WebViewScreen()),
+        (route) => false,
+      );
     }
-    var url = await SdkInitializer.secondMakeConversion(
-      _convrtsion,
-      apnsToken: token,
-      isLoad: false,
-    );
-    setValue(url, "receivedUrl");
-    if (kDebugMode) {
-      print("pushRequest ");
-    }
-    _runtimeStorage['receivedUrl'] = url;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const WebViewScreen()),
-      (route) => false,
-    );
   }
 
   static Future<String> secondMakeConversion(
@@ -641,5 +676,30 @@ Future<Map<String, dynamic>?> sendPostRequest({
       print('Ошибка запроса: $e');
     }
     return null;
+  }
+}
+
+class EventBus {
+  // Контроллер для событий
+  final _controller = StreamController<dynamic>.broadcast();
+
+  // Singleton instance
+  static final EventBus instance = EventBus();
+
+  // Приватный конструктор (если хотите запретить создание экземпляров)
+  // EventBus._(); // или просто не объявляйте public конструктор
+
+  // Поток событий
+  Stream<dynamic> get events => _controller.stream;
+
+  // Отправка события
+  void fire(dynamic event) {
+    print(event);
+    _controller.add(event);
+  }
+
+  // Закрытие
+  void dispose() {
+    _controller.close();
   }
 }

@@ -37,6 +37,12 @@ class UrlLauncherService {
       // _showErrorSnackbar(context, 'Ошибка: $e');
     }
   }
+
+  static void _showErrorSnackbar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 }
 
 Future<void> _launchURL(String url) async {
