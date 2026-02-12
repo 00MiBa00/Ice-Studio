@@ -152,7 +152,26 @@ desc "Sync codesigning certificates for Build"
       UI.message("Failed to update Info.plist: #{ex.message}")
     end
 
-  sh("flutter build ipa --release --export-options-plist=#{export_options_path} --build-number=#{safe_build_number} --no-tree-shake-icons")
+    # Diagnostic information before build
+    UI.message("=== Build Environment ===")
+    sh("xcodebuild -version || true")
+    sh("xcrun --show-sdk-path || true")
+    sh("flutter doctor -v || true")
+    UI.message("========================")
+
+    # Build with verbose output to capture any compilation errors
+    UI.message("Starting Flutter build ipa with build number: #{safe_build_number}")
+    
+    begin
+      sh("flutter build ipa --release --export-options-plist=#{export_options_path} --build-number=#{safe_build_number} --no-tree-shake-icons --verbose")
+    rescue => e
+      UI.error("Flutter build failed with error:")
+      UI.error(e.message)
+      UI.error("Checking for common issues...")
+      sh("cd ../ios && pod --version || true")
+      sh("ls -la ../ios/Pods || true")
+      UI.user_error!("Build failed. See logs above for details.")
+    end
     
     # Find the built IPA file with absolute path
     ipa_path = Dir.glob(File.expand_path("../build/ios/ipa/*.ipa", __dir__)).first
