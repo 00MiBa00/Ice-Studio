@@ -116,7 +116,7 @@ class SdkInitializer {
   static void showApp(BuildContext context) {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const ClearApp()),
+      MaterialPageRoute(builder: (context) => const IceStudio()),
       (route) => false,
     );
   }
