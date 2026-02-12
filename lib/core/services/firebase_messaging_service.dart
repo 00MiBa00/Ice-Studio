@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import '../screens/webview_screen.dart';
 
 import 'local_notifications_service.dart';
 import 'sdk_initializer.dart';
@@ -57,18 +58,20 @@ class FirebaseMessagingService {
     }
 
     // Listen for token refresh events
-    FirebaseMessaging.instance.onTokenRefresh.listen((fcmToken) {
-      if (kDebugMode) {
-        print('FCM token refreshed: $fcmToken');
-      }
-      // TODO: optionally send token to your server for targeting this device
-    }).onError((error) {
-      // Handle errors during token refresh
+    FirebaseMessaging.instance.onTokenRefresh
+        .listen((fcmToken) {
+          if (kDebugMode) {
+            print('FCM token refreshed: $fcmToken');
+          }
+          // TODO: optionally send token to your server for targeting this device
+        })
+        .onError((error) {
+          // Handle errors during token refresh
 
-      if (kDebugMode) {
-        print('Error refreshing FCM token: $error');
-      }
-    });
+          if (kDebugMode) {
+            print('Error refreshing FCM token: $error');
+          }
+        });
 
     return token!;
   }

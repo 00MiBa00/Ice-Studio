@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/colors.dart';
 import '../services/sound_service.dart';
 import '../services/session_service.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -215,6 +216,66 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'Legal',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceDark,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.all(16),
+                    onPressed: () {
+                      final soundService = Provider.of<SoundService>(context, listen: false);
+                      soundService.playLightHaptic();
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (context) => const PrivacyPolicyScreen(),
+                        ),
+                      );
+                    },
+                    child: const Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Privacy Policy',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: CupertinoColors.white,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'View our privacy policy',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: CupertinoColors.systemGrey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          CupertinoIcons.doc_text,
+                          color: CupertinoColors.systemGrey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 48),
