@@ -1,9 +1,6 @@
 name: Build Flutter iOS
 
-
 on: workflow_dispatch
-
-
 
 jobs:
   build-ios:
@@ -41,8 +38,8 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-           
-          channel: 'stable'
+          flutter-version: '3.41.4'
+          channel: stable
           cache: true
       
       ###########################
@@ -56,20 +53,6 @@ jobs:
       ###########################
       - name: Install Flutter dependencies
         run: flutter pub get
-      
-      ###########################
-      #     Analyze Code        #
-      ###########################
-      # - name: Analyze code
-      #   run: flutter analyze
-      #   continue-on-error: true
-      
-      ###########################
-      #      Run Tests          #
-      ###########################
-      # - name: Run tests
-      #   run: flutter test
-      #   continue-on-error: true
       
       ###########################
       #   Setup SSH for Match   #
@@ -95,27 +78,16 @@ jobs:
         run: |
           mkdir -p $HOME/private_keys
 
-          # Write APPSTORE_P8_CONTENT to a file robustly:
-          # - If the secret contains the literal BEGIN line, write it directly
-          # - Otherwise assume the secret is base64 and decode it
-          # - Remove any stray CR (\r) characters which can break OpenSSL
           KEY_PATH=$HOME/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+
           if printf '%s' "$APPSTORE_P8_CONTENT" | grep -q "BEGIN PRIVATE KEY"; then
             printf '%s' "$APPSTORE_P8_CONTENT" | tr -d '\r' > "$KEY_PATH"
           else
-            printf '%s' "$APPSTORE_P8_CONTENT" | base64 --decode 2>/dev/null | tr -d '\r' > "$KEY_PATH" || {
-              echo "Failed to decode APPSTORE_P8_CONTENT as base64 and no BEGIN marker found. Please ensure the secret contains the raw .p8 contents (including -----BEGIN PRIVATE KEY-----) or a base64-encoded value." >&2
-              exit 1
-            }
+            printf '%s' "$APPSTORE_P8_CONTENT" | base64 --decode | tr -d '\r' > "$KEY_PATH"
           fi
 
           chmod 600 "$KEY_PATH"
           echo "APP_STORE_CONNECT_API_KEY_PATH=$KEY_PATH" >> $GITHUB_ENV
-
-          echo "Checking API key file format..."
-          head -n 1 "$KEY_PATH" || true
-          tail -n 1 "$KEY_PATH" || true
-          echo "Key file lines: $(wc -l < \"$KEY_PATH\")"
       
       ###########################
       #  Install Fastlane       #
@@ -126,11 +98,31 @@ jobs:
       ###########################
       #  Install CocoaPods      #
       ###########################
+      - name: Install CocoaPods
+        run: |
+          sudo gem uninstall cocoapods -a -x || true
+          sudo gem install cocoapods -v 1.16.2
+      
+      ###########################
+      #     Cache Pods          #
+      ###########################
+      - name: Cache Pods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+      
+      ###########################
+      #   Install Pods          #
+      ###########################
       - name: Install CocoaPods dependencies
         run: |
           cd ios
           rm -rf Pods Podfile.lock
-          pod install --repo-update
+          pod repo update
+          pod install
       
       ###########################
       #  Sync Certificates      #
@@ -152,26 +144,9 @@ jobs:
           bundle exec fastlane ios sync_certificates_for_build
       
       ###########################
-      #  Export Xcode Project   #
-      ###########################
-      - name: Export Xcode project configuration
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcode-project-config-${{ github.run_number }}
-          path: |
-            ios/Runner.xcodeproj/project.pbxproj
-            ios/Runner.xcodeproj/xcshareddata/**
-            ios/ExportOptions.plist
-            ios/Podfile
-            ios/Podfile.lock
-          if-no-files-found: warn
-          retention-days: 7
-      
-      ###########################
-      #  Build & Deploy (Main)  #
+      #  Build & Deploy         #
       ###########################
       - name: Build and deploy with Fastlane
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
@@ -183,48 +158,11 @@ jobs:
           IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-          # Provide raw .p8 content to Fastlane lanes that expect APPSTORE_P8 (some lanes use :key_content)
           APPSTORE_P8: ${{ secrets.APPSTORE_P8 }}
         run: |
           eval "$(ssh-agent -s)"
           echo "$MATCH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
           bundle exec fastlane ios beta
-      
-      ###########################
-      #  Upload Xcode Archive   #
-      ###########################
-      - name: Upload Xcode archive
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcode-archive-${{ github.run_number }}
-          path: |
-            build/ios/archive/*.xcarchive
-            ios/Runner.xcodeproj
-            ios/Runner.xcworkspace
-            ios/ExportOptions.plist
-          if-no-files-found: warn
-          retention-days: 7
-      
-      ###########################
-      #  Build Only (PR/Dev)    #
-      ###########################
-      - name: Build iOS app without deploy
-        if: github.ref != 'refs/heads/main' && github.event_name != 'workflow_dispatch'
-        env:
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
-          BUILD_NUMBER: ${{ github.run_number }}
-          APPLE_CONNECT_EMAIL: ${{ secrets.APPLE_CONNECT_EMAIL }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          eval "$(ssh-agent -s)"
-          echo "$MATCH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
-          flutter build ipa \
-            --release \
-            --export-options-plist=ExportOptions.plist \
-            --build-number=$BUILD_NUMBER \
-            --no-tree-shake-icons
       
       ###########################
       #     Upload IPA          #
@@ -236,8 +174,6 @@ jobs:
           path: |
             build/ios/ipa/*.ipa
             build/ios/archive/*.xcarchive/**
-            ios/ExportOptions.plist
-            ios/Runner.xcodeproj/project.pbxproj
           if-no-files-found: warn
           retention-days: 30
       
